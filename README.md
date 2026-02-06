@@ -1,4 +1,4 @@
-# Solana Mobile Wallet Toolkit (SMWT) PoC
+# Solana Mobile Wallet Toolkit (SMWT)
 
 A React Native-first developer-experience wrapper around **Solana Mobile Wallet Adapter (MWA)** primitives.
 It provides a tiny API surface for apps that want to connect + sign on mobile without reimplementing Solana Mobile Stack.
