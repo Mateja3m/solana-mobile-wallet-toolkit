@@ -9,10 +9,11 @@
     "ios": "expo run:ios"
   },
   "dependencies": {
+    "@babel/runtime": "^7.28.6",
+    "buffer": "^6.0.3",
     "expo": "^51.0.0",
     "react": "18.2.0",
     "react-native": "0.74.0",
-    "buffer": "^6.0.3",
     "react-native-get-random-values": "^1.11.0",
     "smwt-core": "*"
   }

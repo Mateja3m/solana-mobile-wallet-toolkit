@@ -30,6 +30,18 @@ Android (device or emulator):
 npm run demo:android
 ```
 
+Or manually:
+
+From root:
+```bash
+npm --workspace demo run android
+```
+
+From demo folder:
+```bash
+npx expo run:android
+```
+
 ## Demo script
 1. Install a Solana Mobile Wallet Adapter compatible wallet on Android.
 2. Run the demo app on Android.

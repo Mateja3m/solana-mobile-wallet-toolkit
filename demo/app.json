@@ -4,8 +4,19 @@
     "slug": "smwt-demo",
     "version": "0.0.1",
     "sdkVersion": "51.0.0",
-    "platforms": ["android", "ios"],
+    "platforms": [
+      "android",
+      "ios"
+    ],
     "orientation": "portrait",
-    "userInterfaceStyle": "light"
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "android": {
+      "package": "com.milan3m.smwt"
+    }
   }
 }

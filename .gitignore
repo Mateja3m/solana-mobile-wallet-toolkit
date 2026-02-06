@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# env
+.env
+.env.*.local
+
+# build / coverage
+dist/
+build/
+coverage/
+
+# Expo
+.expo/
+.expo-shared/
+
+# React Native / Android
+android/
+*.keystore
+
+# React Native / iOS
+ios/
+*.xcworkspace/
+*.xcuserstate
