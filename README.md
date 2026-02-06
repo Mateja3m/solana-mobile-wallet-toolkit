@@ -19,29 +19,20 @@ It provides a tiny API surface for apps that want to connect + sign on mobile wi
 
 ## Quick start
 
-```bash
-npm install
-npm run demo:start
-```
-
 Android (device or emulator):
-
-```bash
-npm run demo:android
-```
-
-Or manually:
 
 From root:
 ```bash
+npm install
 npm --workspace demo run android
 ```
 
-From demo folder:
-```bash
-npx expo run:android
-```
+Note: This demo uses a native module, so **Expo Go will not work**. Use `expo run:android` (via the command above) to build a dev client.
 
+Optional (start Metro only, for an existing dev client):
+```bash
+npm --workspace demo start
+```
 ## Demo script
 1. Install a Solana Mobile Wallet Adapter compatible wallet on Android.
 2. Run the demo app on Android.
