@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "SMWT Demo",
+    "slug": "smwt-demo",
+    "version": "0.0.1",
+    "sdkVersion": "51.0.0",
+    "platforms": ["android", "ios"],
+    "orientation": "portrait",
+    "userInterfaceStyle": "light"
+  }
+}

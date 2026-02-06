@@ -1,0 +1,10 @@
+{
+  "name": "smwt-core",
+  "version": "0.0.1",
+  "main": "src/index.js",
+  "type": "module",
+  "dependencies": {
+    "@solana-mobile/mobile-wallet-adapter-protocol": "^2.0.0",
+    "@solana-mobile/mobile-wallet-adapter-protocol-web3js": "^2.0.0"
+  }
+}

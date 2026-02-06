@@ -1,0 +1,12 @@
+{
+  "name": "solana-mobile-wallet-toolkit",
+  "private": true,
+  "workspaces": [
+    "toolkit/*",
+    "demo"
+  ],
+  "scripts": {
+    "demo:start": "npm --workspace demo start",
+    "demo:android": "npm --workspace demo run android"
+  }
+}
