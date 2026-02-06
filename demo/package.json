@@ -2,7 +2,7 @@
   "name": "smwt-demo",
   "version": "0.0.1",
   "private": true,
-  "main": "App.js",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
@@ -10,10 +10,11 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.28.6",
+    "@solana-mobile/mobile-wallet-adapter-protocol": "^2.0.0",
     "buffer": "^6.0.3",
     "expo": "^51.0.0",
     "react": "18.2.0",
-    "react-native": "0.74.0",
+    "react-native": "0.74.5",
     "react-native-get-random-values": "^1.11.0",
     "smwt-core": "*"
   }

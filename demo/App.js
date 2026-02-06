@@ -76,7 +76,7 @@ export default function App() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <Text style={styles.title}>SMWT PoC</Text>
+        <Text style={styles.title}>SMWT - Demo App</Text>
         <Text style={styles.subtitle}>React Native wallet connection + signing demo</Text>
 
         <View style={styles.statusBox}>
