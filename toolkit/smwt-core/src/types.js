@@ -2,6 +2,7 @@
  * @typedef {Object} WalletSession
  * @property {string} publicKey
  * @property {string} walletName
+ * @property {string} authToken
  */
 
 /**

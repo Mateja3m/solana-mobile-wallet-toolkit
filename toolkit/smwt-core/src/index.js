@@ -7,6 +7,14 @@ export function createToolkit({ provider, logger } = {}) {
   }
 
   let session = null;
+  const maskToken = (token) => (token ? `***${String(token).slice(-6)}` : '(none)');
+  const sanitizeSessionForLog = (value) => {
+    if (!value || typeof value !== 'object') return value;
+    return {
+      ...value,
+      authToken: maskToken(value.authToken)
+    };
+  };
 
   const log = (level, message, meta) => {
     if (!logger) return;
@@ -29,7 +37,7 @@ export function createToolkit({ provider, logger } = {}) {
       }
       log('info', 'Requesting wallet connection.');
       session = await provider.connect();
-      log('info', 'Wallet connected.', session);
+      log('info', 'Wallet connected.', sanitizeSessionForLog(session));
       return session;
     },
 

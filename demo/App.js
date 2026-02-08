@@ -37,13 +37,20 @@ export default function App() {
         name: 'SMWT Demo App',
         icon: 'splash.png'
       },
-      chain: 'solana:devnet'
+      chain: 'solana:devnet',
+      logger: {
+        info: (message) => addLog(message),
+        warn: (message) => addLog(message),
+        error: (message) => addLog(message)
+      }
     });
 
     return createToolkit({
       provider,
       logger: {
-        info: (message) => addLog(message)
+        info: (message) => addLog(message),
+        warn: (message) => addLog(message),
+        error: (message) => addLog(message)
       }
     });
   }, [addLog]);
