@@ -2,6 +2,8 @@ import { transact } from '@solana-mobile/mobile-wallet-adapter-protocol-web3js';
 import { Platform } from 'react-native';
 import { ErrorCode, SMWTError, normalizeProviderError } from '../errors.js';
 
+const SIGN_DECLINED_LOCKED_THRESHOLD_MS = 1500;
+
 export function createMwaProvider(options = {}) {
   const {
     appIdentity = {
@@ -15,6 +17,8 @@ export function createMwaProvider(options = {}) {
 
   let authToken = null;
   let session = null;
+
+  const isWalletPackageAvailable = () => typeof transact === 'function';
 
   const log = (level, message, meta) => {
     if (!logger) return;
@@ -41,6 +45,90 @@ export function createMwaProvider(options = {}) {
       message.includes('reauthorize') ||
       message.includes('not authorized')
     );
+  };
+
+  const isDeclinedError = (error) => {
+    const message = String(error?.message || error).toLowerCase();
+    const code = Number(error?.code);
+    return (
+      code === -3 ||
+      message.includes('declined') ||
+      message.includes('rejected') ||
+      message.includes('request declined')
+    );
+  };
+
+  const isTimeoutError = (error) => {
+    const message = String(error?.message || error).toLowerCase();
+    return message.includes('timeout') || message.includes('timed out');
+  };
+
+  const isUtf8Message = (value) => {
+    if (!(value instanceof Uint8Array)) return false;
+    if (typeof TextDecoder !== 'function') return true;
+    try {
+      const decoder = new TextDecoder('utf-8', { fatal: true });
+      decoder.decode(value);
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  };
+
+  const toBase64Prefix = (bytes, prefixLength = 12) => {
+    try {
+      if (globalThis?.Buffer && typeof globalThis.Buffer.from === 'function') {
+        return globalThis.Buffer.from(bytes).toString('base64').slice(0, prefixLength);
+      }
+      if (typeof btoa === 'function') {
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 1) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary).slice(0, prefixLength);
+      }
+    } catch (_error) {
+      // fall through to unavailable marker
+    }
+    return 'unavailable';
+  };
+
+  const assertSigningPreflight = async () => {
+    if (!isWalletPackageAvailable()) {
+      throw new SMWTError(
+        ErrorCode.WALLET_NOT_INSTALLED,
+        'Mobile Wallet Adapter package is unavailable. Reinstall dependencies and retry.'
+      );
+    }
+
+    if (!session) {
+      throw new SMWTError(
+        ErrorCode.AUTHORIZATION_FAILED,
+        'No active wallet session. Connect Phantom before signing.'
+      );
+    }
+
+    if (!session.authToken) {
+      throw new SMWTError(
+        ErrorCode.AUTH_TOKEN_INVALID,
+        'Missing wallet auth token. Reconnect Phantom before signing.'
+      );
+    }
+
+    if (!session.publicKey) {
+      throw new SMWTError(
+        ErrorCode.AUTHORIZATION_FAILED,
+        'Missing wallet account. Reconnect Phantom before signing.'
+      );
+    }
+
+    const available = await Promise.resolve(Platform.OS === 'android');
+    if (!available) {
+      throw new SMWTError(
+        ErrorCode.WALLET_NOT_INSTALLED,
+        'No compatible wallet detected on this device.'
+      );
+    }
   };
 
   const logWalletError = (scope, error) => {
@@ -151,16 +239,19 @@ export function createMwaProvider(options = {}) {
     },
 
     async signMessage(message) {
-      if (!session || !session.authToken) {
+      await assertSigningPreflight();
+
+      if (!(message instanceof Uint8Array) || !isUtf8Message(message)) {
         throw new SMWTError(
-          ErrorCode.NOT_CONNECTED,
-          'Wallet not connected or auth token missing. Connect again before signing.'
+          ErrorCode.INVALID_MESSAGE,
+          'Message must be UTF-8 encoded bytes (Uint8Array).'
         );
       }
 
-      if (!(message instanceof Uint8Array)) {
-        throw new SMWTError(ErrorCode.INVALID_MESSAGE, 'Message must be a Uint8Array.');
-      }
+      log(
+        'info',
+        `[MWA:sign] payload validation ok bytes=${message.length} base64_prefix=${toBase64Prefix(message)}`
+      );
 
       const signOnce = async ({ tokenForAuthorize }) => transact(async (wallet) => {
         // Every transact call starts a new wallet session; re-authorize using the current auth token.
@@ -171,6 +262,7 @@ export function createMwaProvider(options = {}) {
           `[MWA:sign] using auth token ${maskToken(activeSession.authToken)} address=${signingAddress} bytes=${message.length}`
         );
 
+        // @solana-mobile/mobile-wallet-adapter-protocol-web3js expects object params with payloads[].
         const result = await wallet.signMessages({
           auth_token: activeSession.authToken,
           payloads: [message],
@@ -187,16 +279,54 @@ export function createMwaProvider(options = {}) {
         return result.signed_payloads[0];
       });
 
+      const signStartedAt = Date.now();
+      log('info', `[MWA:sign] request launched at=${new Date(signStartedAt).toISOString()}`);
+
       try {
-        return await signOnce({ tokenForAuthorize: session.authToken });
+        const signedPayload = await signOnce({ tokenForAuthorize: session.authToken });
+        const durationMs = Date.now() - signStartedAt;
+        log('info', `[MWA:sign] request completed in ${durationMs}ms`);
+        return signedPayload;
       } catch (error) {
+        const durationMs = Date.now() - signStartedAt;
         logWalletError('sign', error);
+        log(
+          'warn',
+          `[MWA:sign] request failed after ${durationMs}ms (code=${error?.code ?? 'UNKNOWN'}).`
+        );
+
+        const declined = isDeclinedError(error);
+        const likelyWalletLockedOrAborted =
+          declined && durationMs < SIGN_DECLINED_LOCKED_THRESHOLD_MS;
+
+        if (likelyWalletLockedOrAborted) {
+          log(
+            'warn',
+            `[MWA:sign] LIKELY_WALLET_LOCKED_OR_ABORTED: declined in ${durationMs}ms (<${SIGN_DECLINED_LOCKED_THRESHOLD_MS}ms).`
+          );
+          throw normalizeProviderError(error, { walletLockedOrAborted: true });
+        }
+
+        if (declined) {
+          log(
+            'warn',
+            `[MWA:sign] USER_DECLINED_APPROVAL: user declined signing in wallet UI after ${durationMs}ms.`
+          );
+          throw normalizeProviderError(error);
+        }
+
+        if (isTimeoutError(error)) {
+          throw normalizeProviderError(error);
+        }
 
         if (isAuthRelatedError(error)) {
           log('warn', '[MWA:sign] auth token rejected, attempting a fresh authorize and single retry.');
           try {
             // Single retry with a fresh authorize().
-            return await signOnce({ tokenForAuthorize: undefined });
+            const retrySignedPayload = await signOnce({ tokenForAuthorize: undefined });
+            const totalDurationMs = Date.now() - signStartedAt;
+            log('info', `[MWA:sign] request completed after retry in ${totalDurationMs}ms`);
+            return retrySignedPayload;
           } catch (retryError) {
             logWalletError('sign-retry', retryError);
             throw normalizeProviderError(retryError);

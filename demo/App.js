@@ -3,12 +3,28 @@ import { Buffer } from 'buffer';
 import React, { useCallback, useMemo, useState } from 'react';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Button, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { createMwaProvider, createToolkit } from 'smwt-core';
+import { createMwaProvider, createToolkit, ErrorCode } from 'smwt-core';
 
 global.Buffer = global.Buffer || Buffer;
 
 const MESSAGE = 'SMWT PoC signing demo';
 const MAX_SIGNATURE_PREVIEW = 24;
+const SIGN_DECLINED_LOCKED_THRESHOLD_MS = 1500;
+const MESSAGE_OPTIONS = [
+  { key: 'hello', label: 'hello', value: 'hello' },
+  { key: 'smwt', label: 'SMWT PoC signing test', value: 'SMWT PoC signing test' },
+  { key: 'json', label: 'JSON with timestamp', value: null }
+];
+
+const ERROR_GUIDANCE = {
+  [ErrorCode.WALLET_NOT_INSTALLED]: 'Install Phantom (or another MWA wallet) on this Android device.',
+  [ErrorCode.USER_DECLINED_APPROVAL]: 'Approve the signature in Phantom to continue.',
+  [ErrorCode.WALLET_LOCKED_OR_ABORTED]: 'Open Phantom first, unlock it, then retry signing.',
+  [ErrorCode.AUTHORIZATION_FAILED]: 'Reconnect wallet, then retry.',
+  [ErrorCode.AUTH_TOKEN_INVALID]: 'Session token expired or missing. Reconnect wallet.',
+  [ErrorCode.TIMEOUT]: 'Request timed out. Keep Phantom open and retry.',
+  [ErrorCode.DEEPLINK_RETURN_FAILED]: 'Wallet did not return to app. Bring app back to foreground and retry.'
+};
 
 function shortenMiddle(value, sideLength = MAX_SIGNATURE_PREVIEW) {
   if (!value || value.length <= sideLength * 2 + 3) {
@@ -25,6 +41,7 @@ export default function App() {
   const [logs, setLogs] = useState([]);
   const [signatureBase64, setSignatureBase64] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [selectedMessageKey, setSelectedMessageKey] = useState(MESSAGE_OPTIONS[0].key);
 
   const addLog = useCallback((message) => {
     const timestamp = new Date().toISOString().split('T')[1].replace('Z', '');
@@ -72,15 +89,38 @@ export default function App() {
 
   const onSign = async () => {
     setIsBusy(true);
+    const signStartedAt = Date.now();
     try {
-      addLog('Sign Message button pressed.');
-      const messageBytes = Buffer.from(MESSAGE, 'utf8');
+      addLog(`Sign Message button pressed at ${new Date(signStartedAt).toISOString()}. Opening Phantom...`);
+      const chosenMessage = selectedMessageKey === 'json'
+        ? JSON.stringify({ type: 'smwt-sign-test', timestamp: new Date().toISOString() })
+        : MESSAGE_OPTIONS.find((option) => option.key === selectedMessageKey)?.value || MESSAGE;
+      const messageBytes = Buffer.from(chosenMessage, 'utf8');
+      const messagePrefix = Buffer.from(messageBytes).toString('base64').slice(0, 12);
+      addLog(`Selected message: "${chosenMessage}"`);
+      addLog(`Message debug: bytes=${messageBytes.length} base64_prefix=${messagePrefix}`);
       const signature = await toolkit.signMessage(messageBytes);
       const base64 = Buffer.from(signature).toString('base64');
       setSignatureBase64(base64);
-      addLog('Message signed successfully.');
+      const durationMs = Date.now() - signStartedAt;
+      addLog(`Message signed successfully in ${durationMs}ms.`);
     } catch (error) {
-      addLog(`Sign error: ${error.code || 'UNKNOWN'} - ${error.message}`);
+      const durationMs = Date.now() - signStartedAt;
+      const errorCode = error.code || 'UNKNOWN';
+      addLog(`Sign flow returned in ${durationMs}ms (threshold=${SIGN_DECLINED_LOCKED_THRESHOLD_MS}ms).`);
+      addLog(`Sign error code: ${errorCode}`);
+      const guidance = ERROR_GUIDANCE[errorCode] || 'Review wallet/app logs and retry.';
+
+      if (errorCode === ErrorCode.WALLET_LOCKED_OR_ABORTED) {
+        addLog('WALLET_LOCKED_OR_ABORTED.');
+        addLog('Phantom is locked. Please open Phantom, unlock it, then retry signing.');
+      } else if (errorCode === ErrorCode.USER_DECLINED_APPROVAL || errorCode === ErrorCode.USER_CANCELLED) {
+        addLog('USER_DECLINED_APPROVAL in Phantom UI.');
+        addLog(`Guidance: ${guidance}`);
+      } else {
+        addLog(`Sign error: ${errorCode} - ${error.message}`);
+        addLog(`Guidance: ${guidance}`);
+      }
     } finally {
       setIsBusy(false);
     }
@@ -146,6 +186,19 @@ export default function App() {
         </View>
         <View style={styles.buttonRow}>
           <Button title="Disconnect" onPress={onDisconnect} disabled={!canDisconnect} />
+        </View>
+
+        <View style={styles.statusBox}>
+          <Text style={styles.statusLabel}>Test Message</Text>
+          {MESSAGE_OPTIONS.map((option) => (
+            <View style={styles.buttonRow} key={option.key}>
+              <Button
+                title={selectedMessageKey === option.key ? `Selected: ${option.label}` : option.label}
+                onPress={() => setSelectedMessageKey(option.key)}
+                disabled={isBusy}
+              />
+            </View>
+          ))}
         </View>
 
         <View style={styles.logBox}>
