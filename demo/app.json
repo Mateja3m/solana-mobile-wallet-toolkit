@@ -5,8 +5,7 @@
     "version": "0.0.1",
     "sdkVersion": "51.0.0",
     "platforms": [
-      "android",
-      "ios"
+      "android"
     ],
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -17,9 +16,6 @@
     },
     "android": {
       "package": "com.milan3m.smwt"
-    },
-    "ios": {
-      "bundleIdentifier": "com.milan3m.smwt"
     }
   }
 }

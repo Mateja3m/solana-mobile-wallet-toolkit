@@ -25,12 +25,21 @@ coverage/
 # Expo
 .expo/
 .expo-shared/
+demo/.expo/
+demo/.expo-shared/
 
-# React Native / Android
-android/
+# React Native / Android (generated native projects + local build artifacts)
+/android/
+/app.json
+demo/android/
+.gradle/
 *.keystore
+*.jks
+local.properties
 
 # React Native / iOS
-ios/
+/ios/
+demo/ios/
 *.xcworkspace/
 *.xcuserstate
+DerivedData/
