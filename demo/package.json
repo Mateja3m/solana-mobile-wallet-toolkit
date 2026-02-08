@@ -6,7 +6,8 @@
   "scripts": {
     "lint": "eslint . --ext .js,.jsx",
     "start": "expo start",
-    "android": "expo run:android"
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@react-native-clipboard/clipboard": "^1.14.3",
