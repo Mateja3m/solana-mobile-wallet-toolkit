@@ -16,29 +16,89 @@ It provides a tiny API surface for apps that want to connect + sign on mobile wi
 ## Monorepo structure
 - `toolkit/smwt-core` — JS library (provider + toolkit wrapper)
 - `demo` — React Native demo app
+- `package.json` — root workspace config
+- `demo/package.json` — demo app package config
 
 ## Quick start
 
-Android (device or emulator):
+The Solana Mobile Wallet Toolkit (SMWT) is designed to work with the Solana Mobile Wallet Adapter (MWA) protocol. MWA allows your app to connect with wallet apps (like Phantom, Solflare, etc.) installed on the device.
 
-From root:
+**Note:** Because MWA requires interactions between two different apps, and this demo uses native modules, **Expo Go will not work**. You must build and install the native Android app.
+
+### Pre-requisites
+- Node.js 18+ and npm.
+- JDK 17 (required by modern Android Gradle toolchain).
+- Android SDK + platform tools (`adb`) installed.
+- Android device (physical device recommended).
+- USB debugging enabled on your device.
+- A Solana wallet app (for example Phantom or Solflare) installed on your device.
+
+### 0. Install dependencies (workspace root)
+Run this from the repository root:
+
 ```bash
 npm install
-npm --workspace demo run android
 ```
 
-Note: This demo uses a native module, so **Expo Go will not work**. Use `expo run:android` (via the command above) to build a dev client.
+### 1. Verify Android device connection
+With your phone connected over USB:
 
-Optional (start Metro only, for an existing dev client):
+```bash
+adb devices
+```
+
+You should see your device listed as `device` (not `unauthorized`).
+
+### 2. Start Metro bundler (keep this terminal open)
+
 ```bash
 npm --workspace demo start
 ```
-## Demo script
-1. Install a Solana Mobile Wallet Adapter compatible wallet on Android.
-2. Run the demo app on Android.
-3. Tap **Connect** → approve in wallet.
-4. Tap **Sign Message** → approve in wallet → base64 signature appears.
-5. Tap **Disconnect**.
+
+If your app is installed over USB, forward Metro port:
+
+```bash
+adb reverse tcp:8081 tcp:8081
+```
+
+### 3. Build debug APK
+
+```bash
+cd demo/android
+./gradlew assembleDebug
+```
+
+APK output path:
+`demo/android/app/build/outputs/apk/debug/app-debug.apk`
+
+### 4. Install the app
+
+#### Option A: Manual install
+1. Transfer `app-debug.apk` to your device.
+2. Open it on device and install.
+3. If prompted, enable "Install unknown apps" for the file manager/browser you used.
+
+#### Option B: ADB install
+From repository root:
+
+```bash
+adb install -r demo/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+### 5. Test flow
+1. Open **SMWT Demo**.
+2. Tap **Connect** and approve in wallet app.
+3. Confirm status shows connected public key.
+4. Tap **Sign Message** and approve in wallet app.
+5. Confirm signature appears in app logs/status.
+6. Tap **Disconnect**.
+
+## Troubleshooting
+
+- **Expo Go does not work**: this project uses native modules and MWA app-to-app flows.
+- **Wallet not detected / connect fails**: verify wallet is installed and unlocked on the same device.
+- **App opens but JS bundle fails to load**: confirm Metro is running and run `adb reverse tcp:8081 tcp:8081`.
+- **No device in `adb devices`**: reinstall USB driver (Windows), reconnect cable, and re-enable USB debugging.
 
 ## Known limitations
 - Android-only (MWA is Android-first; iOS not supported in this PoC).

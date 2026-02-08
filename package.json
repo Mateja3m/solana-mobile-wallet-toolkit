@@ -6,7 +6,12 @@
     "demo"
   ],
   "scripts": {
+    "lint": "npm run lint -ws --if-present",
     "demo:start": "npm --workspace demo start",
     "demo:android": "npm --workspace demo run android"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-expo": "^7.1.0"
   }
 }

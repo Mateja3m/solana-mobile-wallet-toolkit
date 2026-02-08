@@ -1,22 +1,35 @@
 import 'react-native-get-random-values';
 import { Buffer } from 'buffer';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { Button, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { createMwaProvider, createToolkit } from 'smwt-core';
 
 global.Buffer = global.Buffer || Buffer;
 
 const MESSAGE = 'SMWT PoC signing demo';
+const MAX_SIGNATURE_PREVIEW = 24;
+
+function shortenMiddle(value, sideLength = MAX_SIGNATURE_PREVIEW) {
+  if (!value || value.length <= sideLength * 2 + 3) {
+    return value;
+  }
+
+  const start = value.slice(0, sideLength);
+  const end = value.slice(-sideLength);
+  return `${start}...${end}`;
+}
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [logs, setLogs] = useState([]);
   const [signatureBase64, setSignatureBase64] = useState(null);
+  const [isBusy, setIsBusy] = useState(false);
 
-  const addLog = (message) => {
+  const addLog = useCallback((message) => {
     const timestamp = new Date().toISOString().split('T')[1].replace('Z', '');
     setLogs((prev) => [`${timestamp} ${message}`, ...prev]);
-  };
+  }, []);
 
   const toolkit = useMemo(() => {
     const provider = createMwaProvider({
@@ -34,9 +47,10 @@ export default function App() {
         info: (message) => addLog(message)
       }
     });
-  }, []);
+  }, [addLog]);
 
   const onConnect = async () => {
+    setIsBusy(true);
     try {
       addLog('Connect button pressed.');
       const nextSession = await toolkit.connect();
@@ -45,10 +59,13 @@ export default function App() {
       addLog(`Connected: ${nextSession.publicKey}`);
     } catch (error) {
       addLog(`Connect error: ${error.code || 'UNKNOWN'} - ${error.message}`);
+    } finally {
+      setIsBusy(false);
     }
   };
 
   const onSign = async () => {
+    setIsBusy(true);
     try {
       addLog('Sign Message button pressed.');
       const messageBytes = Buffer.from(MESSAGE, 'utf8');
@@ -58,10 +75,13 @@ export default function App() {
       addLog('Message signed successfully.');
     } catch (error) {
       addLog(`Sign error: ${error.code || 'UNKNOWN'} - ${error.message}`);
+    } finally {
+      setIsBusy(false);
     }
   };
 
   const onDisconnect = async () => {
+    setIsBusy(true);
     try {
       addLog('Disconnect button pressed.');
       await toolkit.disconnect();
@@ -70,8 +90,24 @@ export default function App() {
       addLog('Disconnected.');
     } catch (error) {
       addLog(`Disconnect error: ${error.code || 'UNKNOWN'} - ${error.message}`);
+    } finally {
+      setIsBusy(false);
     }
   };
+
+  const onCopySignature = () => {
+    if (!signatureBase64) {
+      return;
+    }
+
+    Clipboard.setString(signatureBase64);
+    addLog('Signature copied to clipboard.');
+  };
+
+  const canConnect = !isBusy && !session;
+  const canSign = !isBusy && !!session;
+  const canDisconnect = !isBusy && !!session;
+  const signaturePreview = shortenMiddle(signatureBase64);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -89,18 +125,21 @@ export default function App() {
         {signatureBase64 ? (
           <View style={styles.statusBox}>
             <Text style={styles.statusLabel}>Signature (base64)</Text>
-            <Text style={styles.statusText}>{signatureBase64}</Text>
+            <Text style={styles.statusText}>{signaturePreview}</Text>
+            <View style={styles.copyButton}>
+              <Button title="Copy Signature" onPress={onCopySignature} />
+            </View>
           </View>
         ) : null}
 
         <View style={styles.buttonRow}>
-          <Button title="Connect" onPress={onConnect} />
+          <Button title="Connect" onPress={onConnect} disabled={!canConnect} />
         </View>
         <View style={styles.buttonRow}>
-          <Button title="Sign Message" onPress={onSign} />
+          <Button title="Sign Message" onPress={onSign} disabled={!canSign} />
         </View>
         <View style={styles.buttonRow}>
-          <Button title="Disconnect" onPress={onDisconnect} />
+          <Button title="Disconnect" onPress={onDisconnect} disabled={!canDisconnect} />
         </View>
 
         <View style={styles.logBox}>
@@ -151,6 +190,9 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     marginTop: 4
+  },
+  copyButton: {
+    marginTop: 10
   },
   logBox: {
     flex: 1,
