@@ -17,10 +17,18 @@
   "scripts": {
     "lint": "npm run lint -ws --if-present",
     "demo:start": "npm --workspace demo start",
-    "demo:android": "npm --workspace demo run android"
+    "demo:android": "npm --workspace demo run android",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "devDependencies": {
     "eslint": "^8.57.1",
     "eslint-config-expo": "^7.1.0"
+  },
+  "version": "1.0.0",
+  "dependencies": {
+    "expo": "~51.0.28",
+    "react": "18.2.0",
+    "react-native": "0.74.5"
   }
 }
