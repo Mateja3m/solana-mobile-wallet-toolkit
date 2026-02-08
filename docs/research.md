@@ -18,3 +18,11 @@ Use Option A for the PoC: `@solana-mobile/mobile-wallet-adapter-protocol` + `@so
 This keeps us on official Solana primitives, avoids reimplementing protocols, and delivers a real Android flow quickly.
 
 Deferred: iOS support, multi-wallet discovery, and production-grade UX.
+
+## PoC finding: identity metadata validation
+- During phone testing (Phantom detected, deep link/intent flow working), authorization failed at identity metadata validation.
+- Practical issue observed: strict wallet-side validation around `identity` fields, especially `icon` format expectations.
+- Working approach in this PoC:
+  - Demo app identity uses `name` + relative `icon`.
+  - Provider defaults avoid fragile absolute icon URLs.
+- Outcome: wallet discovery and transport flow stayed valid; metadata-related authorization failures were removed.
