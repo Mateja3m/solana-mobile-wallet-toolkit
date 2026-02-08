@@ -1,6 +1,15 @@
 {
   "name": "solana-mobile-wallet-toolkit",
+  "description": "React Native-first toolkit for testing Solana Mobile Wallet Adapter flows on physical Android devices.",
   "private": true,
+  "keywords": [
+    "solana",
+    "react-native",
+    "mobile-wallet-adapter",
+    "solana-mobile-stack",
+    "sdk",
+    "tooling"
+  ],
   "workspaces": [
     "toolkit/*",
     "demo"

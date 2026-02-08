@@ -3,6 +3,12 @@
 A React Native-first developer-experience wrapper around **Solana Mobile Wallet Adapter (MWA)** primitives.
 It provides a tiny API surface for apps that want to connect + sign on mobile without reimplementing Solana Mobile Stack.
 
+## Why this exists (the problem)
+Local testing of Solana mobile dApps is harder than standard RN app testing because MWA is an app-to-app protocol.
+In practice, wallet handoff flows are often unreliable on emulators, especially for deep links, lifecycle switching, and wallet return/cancel behavior.
+That creates a gap between "build succeeds" and "real wallet interaction works."
+SMWT exists to reduce that gap and make physical-device wallet testing repeatable.
+
 ## What it is
 - A minimal DX layer: `connect()`, `disconnect()`, `signMessage()`, `getSession()`.
 - One provider implementation using Solana Mobile Wallet Adapter.
@@ -25,11 +31,41 @@ The Solana Mobile Wallet Toolkit (SMWT) is designed to work with the Solana Mobi
 
 **Note:** Because MWA requires interactions between two different apps, and this demo uses native modules, **Expo Go will not work**. You must build and install the native Android app.
 
+## The APK workflow (primary use case / USP)
+This toolkit is primarily optimized for creating test APK builds that you can side-load onto physical Android devices.
+The fastest validation path is: build/install APK -> connect to real wallet app -> test connect/sign/disconnect lifecycle.
+This is the core development loop the project is designed for.
+
+## Wallet scope (mobile vs web wallets)
+SMWT targets mobile-native wallets that support Solana Mobile Wallet Adapter on Android.
+Desktop browser wallets and extension-only web wallets are out of scope for this toolkit.
+WalletConnect-style web flows are also not a target in this PoC.
+The focus is app-to-app wallet interaction on the same device.
+If a wallet works only in desktop browser context, treat it as unsupported here.
+If a wallet supports MWA on Android, it is a candidate for compatibility testing.
+ 
+### Option A (recommended): shortest path
+Run from repository root:
+
+```bash
+npm install
+npm --workspace demo run android
+```
+
+Then complete wallet flow on a physical device:
+1. Open **SMWT Demo**.
+2. Tap **Connect** and approve in wallet app.
+3. Tap **Sign Message** and approve in wallet app.
+4. Tap **Disconnect**.
+
+### Option B (manual APK flow)
+Use this if you want explicit APK artifacts and manual install control.
+
 ### Pre-requisites
 - Node.js 18+ and npm.
 - JDK 17 (required by modern Android Gradle toolchain).
 - Android SDK + platform tools (`adb`) installed.
-- Android device (physical device recommended).
+- Android device (physical device strongly recommended).
 - USB debugging enabled on your device.
 - A Solana wallet app (for example Phantom or Solflare) installed on your device.
 
@@ -73,12 +109,12 @@ APK output path:
 
 ### 4. Install the app
 
-#### Option A: Manual install
+#### Method 1: Manual install
 1. Transfer `app-debug.apk` to your device.
 2. Open it on device and install.
 3. If prompted, enable "Install unknown apps" for the file manager/browser you used.
 
-#### Option B: ADB install
+#### Method 2: ADB install
 From repository root:
 
 ```bash
@@ -106,30 +142,3 @@ adb install -r demo/android/app/build/outputs/apk/debug/app-debug.apk
 - Session is in-memory only (no persistence).
 - Single-provider only (MWA).
 - Default chain is `solana:devnet`.
-
-## Next milestones
-1. Add multi-wallet discovery + user selection.
-2. Add session persistence and auth token caching.
-3. Expand error taxonomy from explicit MWA error codes.
-4. Evaluate iOS strategy once official support exists.
-
-## Provider API (smwt-core)
-
-```js
-import { createToolkit, createMwaProvider } from 'smwt-core';
-
-const toolkit = createToolkit({
-  provider: createMwaProvider({
-    appIdentity: {
-      name: 'My App',
-      uri: 'https://example.com',
-      icon: 'https://example.com/icon.png'
-    },
-    chain: 'solana:devnet'
-  })
-});
-
-await toolkit.connect();
-await toolkit.signMessage(new Uint8Array([1, 2, 3]));
-await toolkit.disconnect();
-```
