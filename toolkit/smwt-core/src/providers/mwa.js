@@ -6,8 +6,8 @@ export function createMwaProvider(options = {}) {
   const {
     appIdentity = {
       name: 'SMWT Demo',
-      uri: 'https://example.com',
-      icon: 'https://example.com/icon.png'
+      // MWA expects icon to be a relative URI.
+      icon: 'icon.png'
     },
     chain = 'solana:devnet'
   } = options;

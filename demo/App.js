@@ -34,9 +34,8 @@ export default function App() {
   const toolkit = useMemo(() => {
     const provider = createMwaProvider({
       appIdentity: {
-        name: 'SMWT Demo',
-        uri: 'https://example.com',
-        icon: 'https://example.com/icon.png'
+        name: 'SMWT Demo App',
+        icon: 'splash.png'
       },
       chain: 'solana:devnet'
     });

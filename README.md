@@ -8,6 +8,8 @@ Local testing of Solana mobile dApps is harder than standard RN app testing beca
 In practice, wallet handoff flows are often unreliable on emulators, especially for deep links, lifecycle switching, and wallet return/cancel behavior.
 That creates a gap between "build succeeds" and "real wallet interaction works."
 SMWT exists to reduce that gap and make physical-device wallet testing repeatable.
+During PoC testing on physical Android devices, we also validated strict MWA identity metadata rules (for example, icon format constraints) and adjusted app identity defaults to keep integration protocol-compliant.
+In the demo app, identity metadata is configured with a relative `icon` path to satisfy these rules.
 
 ## What it is
 - A minimal DX layer: `connect()`, `disconnect()`, `signMessage()`, `getSession()`.
