@@ -10,11 +10,12 @@
     "ios": "expo run:ios"
   },
   "dependencies": {
-    "@react-native-clipboard/clipboard": "^1.14.3",
     "@babel/runtime": "^7.28.6",
+    "@react-native-clipboard/clipboard": "^1.14.3",
     "@solana-mobile/mobile-wallet-adapter-protocol": "^2.0.0",
     "buffer": "^6.0.3",
     "expo": "^51.0.0",
+    "nullthrows": "^1.1.1",
     "react": "18.2.0",
     "react-native": "0.74.5",
     "react-native-get-random-values": "^1.11.0",
