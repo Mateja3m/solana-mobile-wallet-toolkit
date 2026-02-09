@@ -77,6 +77,94 @@ export function createMwaProvider(options = {}) {
     }
   };
 
+  const getByteArrayPreview = (value, prefixLength = 8) => {
+    if (!(value instanceof Uint8Array)) return 'n/a';
+    const size = Math.min(prefixLength, value.length);
+    const prefix = Array.from(value.slice(0, size))
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
+    return prefix;
+  };
+
+  const inspectSignResult = (result) => {
+    if (Array.isArray(result)) {
+      const first = result[0];
+      log(
+        'info',
+        `[MWA:sign] result=array length=${result.length} first_len=${first instanceof Uint8Array ? first.length : 'n/a'} first_hex_prefix=${getByteArrayPreview(first)}`
+      );
+      return;
+    }
+
+    const keys = result && typeof result === 'object' ? Object.keys(result) : [];
+    log('info', `[MWA:sign] result_keys=${keys.length ? keys.join(',') : '(none)'}`);
+
+    const candidates = [
+      'signed_payloads',
+      'signedPayloads',
+      'signatures',
+      'signed_messages',
+      'payloads'
+    ];
+
+    candidates.forEach((key) => {
+      const value = result?.[key];
+      if (Array.isArray(value)) {
+        const first = value[0];
+        const firstLength =
+          first instanceof Uint8Array
+            ? first.length
+            : typeof first === 'string'
+              ? first.length
+              : 'n/a';
+        log('info', `[MWA:sign] field=${key} array_len=${value.length} first_len=${firstLength}`);
+      } else if (value != null) {
+        log('info', `[MWA:sign] field=${key} type=${typeof value}`);
+      }
+    });
+  };
+
+  const toUint8Array = (value) => {
+    if (value instanceof Uint8Array) return value;
+    if (value instanceof ArrayBuffer) return new Uint8Array(value);
+    if (ArrayBuffer.isView(value)) {
+      return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    }
+    if (typeof value === 'string') {
+      const bufferCtor = globalThis?.Buffer;
+      if (!bufferCtor || typeof bufferCtor.from !== 'function') return null;
+      try {
+        return Uint8Array.from(bufferCtor.from(value, 'base64'));
+      } catch (_error) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const extractFirstSignedPayload = (result) => {
+    if (Array.isArray(result)) {
+      return toUint8Array(result[0]);
+    }
+
+    const arrays = [
+      result?.signedPayloads,
+      result?.signed_payloads,
+      result?.signatures,
+      result?.signed_messages,
+      result?.payloads
+    ];
+
+    for (const value of arrays) {
+      if (Array.isArray(value) && value.length > 0) {
+        const first = toUint8Array(value[0]);
+        if (first) return first;
+      }
+    }
+
+    return null;
+  };
+
   const normalizeAuthorizedAccount = (account) => {
     const adapterAddress = account?.address;
     if (typeof adapterAddress !== 'string' || adapterAddress.length === 0) {
@@ -288,15 +376,16 @@ export function createMwaProvider(options = {}) {
         });
 
         log('info', '[MWA:sign] Returned from wallet');
-
-        if (!result || !result.signed_payloads || result.signed_payloads.length === 0) {
+        inspectSignResult(result);
+        const signedPayload = extractFirstSignedPayload(result);
+        if (!signedPayload || signedPayload.length === 0) {
           throw new SMWTError(
-            ErrorCode.UNKNOWN,
+            ErrorCode.DEEPLINK_RETURN_FAILED,
             'Wallet did not return a signed payload.'
           );
         }
 
-        return result.signed_payloads[0];
+        return signedPayload;
       });
 
       const signStartedAt = Date.now();
