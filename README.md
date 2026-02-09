@@ -4,7 +4,7 @@ A React Native-first developer-experience wrapper around **Solana Mobile Wallet 
 It provides a tiny API surface for apps that want to connect + sign on mobile without reimplementing Solana Mobile Stack.
 
 ## Why this exists (the problem)
-Local testing of Solana mobile dApps is harder than standard RN app testing because MWA is an app-to-app protocol.
+Local testing of Solana mobile dApps is harder than standard React Native app testing because MWA is an app-to-app protocol.
 In practice, wallet handoff flows are often unreliable on emulators, especially for deep links, lifecycle switching, and wallet return/cancel behavior.
 That creates a gap between "build succeeds" and "real wallet interaction works."
 SMWT exists to reduce that gap and make physical-device wallet testing repeatable.
@@ -22,9 +22,9 @@ During PoC testing on physical Android devices, we validated MWA identity metada
 
 ## Monorepo structure
 - `toolkit/smwt-core` — JS library (provider + toolkit wrapper)
-- `demo` — React Native demo app
-- `package.json` — root workspace config
-- `demo/package.json` — demo app package config
+- `demo` - React Native demo app
+- `package.json` - root workspace config
+- `demo/package.json` - demo app package config
 
 ## Quick start
 
