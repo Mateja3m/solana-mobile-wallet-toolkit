@@ -3,14 +3,13 @@ import bs58 from 'bs58';
 import { Platform } from 'react-native';
 import { ErrorCode, SMWTError, normalizeProviderError } from '../errors.js';
 
-const DEBUG_MWA = true;
+const FLOW_ABORTED_THRESHOLD_MS = 1500;
 
 export function createMwaProvider(options = {}) {
   const {
     appIdentity = {
       name: 'SMWT Demo',
-      // MWA expects icon to be a relative URI.
-      icon: 'icon.png'
+      uri: 'https://github.com/Mateja3m/solana-mobile-wallet-toolkit'
     },
     chain = 'solana:devnet',
     logger
@@ -28,11 +27,6 @@ export function createMwaProvider(options = {}) {
     } else if (typeof logger.log === 'function') {
       logger.log(message, meta);
     }
-  };
-
-  const debugLog = (message) => {
-    if (!DEBUG_MWA) return;
-    log('info', `[MWA:debug] ${message}`);
   };
 
   const isAuthRelatedError = (error) => {
@@ -53,15 +47,15 @@ export function createMwaProvider(options = {}) {
     return `${value.slice(0, 6)}...${value.slice(-6)}`;
   };
 
-  const getBase64Prefix = (bytes, prefixLength = 12) => {
-    try {
-      if (globalThis?.Buffer && typeof globalThis.Buffer.from === 'function') {
-        return globalThis.Buffer.from(bytes).toString('base64').slice(0, prefixLength);
-      }
-    } catch (_error) {
-      // no-op
-    }
-    return 'n/a';
+  const isDeclinedError = (error) => {
+    const code = Number(error?.code);
+    const message = String(error?.message || error).toLowerCase();
+    return (
+      code === -3 ||
+      message.includes('declined') ||
+      message.includes('rejected') ||
+      message.includes('not signed')
+    );
   };
 
   const decodeBase64Address = (address) => {
@@ -94,10 +88,6 @@ export function createMwaProvider(options = {}) {
 
     const addressBytes = decodeBase64Address(adapterAddress);
     const publicKey = addressBytes ? bs58.encode(addressBytes) : adapterAddress;
-    debugLog(
-      `authorize.account address_len=${adapterAddress.length} parsed_base64=${addressBytes ? 'yes' : 'no'} publicKey_preview=${maskAddress(publicKey)}`
-    );
-
     return {
       adapterAddress,
       publicKey,
@@ -150,13 +140,9 @@ export function createMwaProvider(options = {}) {
   const logWalletError = (scope, error) => {
     const code = error?.code ?? 'UNKNOWN';
     log('error', `[MWA:${scope}] code=${code} message=${error?.message || String(error)}`);
-    debugLog(`[${scope}] raw_error name=${error?.name || 'UNKNOWN'} code=${code}`);
   };
 
   const applyAuthorizationResult = (authorizationResult) => {
-    debugLog(
-      `authorize.result accounts=${authorizationResult?.accounts?.length || 0} token_present=${authorizationResult?.auth_token ? 'yes' : 'no'}`
-    );
     const normalizedAccount = normalizeAuthorizedAccount(authorizationResult.accounts[0]);
     authToken = authorizationResult.auth_token || authToken;
     session = {
@@ -231,7 +217,6 @@ export function createMwaProvider(options = {}) {
 
       try {
         return await transact(async (wallet) => {
-          debugLog('connect.transact opened');
           return authorizeInSession(wallet, authToken);
         });
       } catch (error) {
@@ -270,14 +255,12 @@ export function createMwaProvider(options = {}) {
       }
 
       const signOnce = async ({ tokenForAuthorize }) => transact(async (wallet) => {
-        debugLog('sign.transact opened');
         let authResult;
         let authStep;
 
         if (tokenForAuthorize) {
           authStep = 'reauthorize';
           log('info', '[MWA:sign] auth_step=reauthorize');
-          debugLog(`sign.reauthorize token_present=${tokenForAuthorize ? 'yes' : 'no'}`);
           authResult = await wallet.reauthorize({
             auth_token: tokenForAuthorize,
             identity: appIdentity
@@ -285,7 +268,6 @@ export function createMwaProvider(options = {}) {
         } else {
           authStep = 'authorize';
           log('info', '[MWA:sign] auth_step=authorize');
-          debugLog('sign.authorize fresh');
           authResult = await wallet.authorize({
             chain,
             identity: appIdentity
@@ -296,10 +278,8 @@ export function createMwaProvider(options = {}) {
         const signingAddress = activeSession.accountAddress;
         log(
           'info',
-          `[MWA:sign] message_bytes=${message.length} address=${maskAddress(signingAddress)}`
+          `[MWA:sign] Launching sign request (auth=${authStep} bytes=${message.length} address=${maskAddress(signingAddress)})`
         );
-        debugLog(`sign.payload base64_prefix=${getBase64Prefix(message)}`);
-        log('info', `[MWA:sign] launching_sign_request via ${authStep}`);
 
         // @solana-mobile/mobile-wallet-adapter-protocol-web3js expects object params with payloads[].
         const result = await wallet.signMessages({
@@ -307,8 +287,7 @@ export function createMwaProvider(options = {}) {
           addresses: [signingAddress]
         });
 
-        log('info', '[MWA:sign] wallet_response_received');
-        debugLog('sign.wallet_response received');
+        log('info', '[MWA:sign] Returned from wallet');
 
         if (!result || !result.signed_payloads || result.signed_payloads.length === 0) {
           throw new SMWTError(
@@ -320,10 +299,17 @@ export function createMwaProvider(options = {}) {
         return result.signed_payloads[0];
       });
 
+      const signStartedAt = Date.now();
       try {
         return await signOnce({ tokenForAuthorize: session.authToken });
       } catch (error) {
         logWalletError('sign', error);
+        const durationMs = Date.now() - signStartedAt;
+
+        if (isDeclinedError(error) && durationMs < FLOW_ABORTED_THRESHOLD_MS) {
+          log('warn', '[MWA:sign] Result: FLOW_ABORTED (no approval UI shown)');
+          throw normalizeProviderError(error, { flowAborted: true });
+        }
 
         if (isAuthRelatedError(error)) {
           log('warn', 'Auth token rejected. Attempting a fresh authorize + one retry.');
@@ -337,7 +323,6 @@ export function createMwaProvider(options = {}) {
               'warn',
               `[MWA:sign] mapped_error=${mappedRetryError.code} reason=${mappedRetryError.message}`
             );
-            debugLog(`sign.retry mapped_code=${mappedRetryError.code}`);
             throw mappedRetryError;
           }
         }
@@ -347,7 +332,6 @@ export function createMwaProvider(options = {}) {
           'warn',
           `[MWA:sign] mapped_error=${mappedError.code} reason=${mappedError.message}`
         );
-        debugLog(`sign.final mapped_code=${mappedError.code}`);
         throw mappedError;
       }
     }

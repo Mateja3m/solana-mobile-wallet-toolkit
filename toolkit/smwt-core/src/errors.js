@@ -1,6 +1,7 @@
 export const ErrorCode = {
   WALLET_NOT_INSTALLED: 'WALLET_NOT_INSTALLED',
   USER_DECLINED_APPROVAL: 'USER_DECLINED_APPROVAL',
+  FLOW_ABORTED: 'FLOW_ABORTED',
   AUTHORIZATION_FAILED: 'AUTHORIZATION_FAILED',
   AUTH_TOKEN_INVALID: 'AUTH_TOKEN_INVALID',
   TIMEOUT: 'TIMEOUT',
@@ -23,11 +24,20 @@ export class SMWTError extends Error {
   }
 }
 
-export function normalizeProviderError(error) {
+export function normalizeProviderError(error, options = {}) {
+  const { flowAborted = false } = options;
   if (error instanceof SMWTError) return error;
   const message = String(error && error.message ? error.message : error);
   const lower = message.toLowerCase();
   const code = Number(error?.code);
+
+  if (flowAborted) {
+    return new SMWTError(
+      ErrorCode.FLOW_ABORTED,
+      'Wallet flow was aborted before the signing approval screen.',
+      error
+    );
+  }
 
   if (
     lower.includes('auth token not valid for signing') ||

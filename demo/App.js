@@ -13,6 +13,7 @@ const MAX_SIGNATURE_PREVIEW = 24;
 const ERROR_GUIDANCE = {
   [ErrorCode.WALLET_NOT_INSTALLED]: 'Install Phantom (or another MWA wallet) on this Android device.',
   [ErrorCode.USER_DECLINED_APPROVAL]: 'Approve the signature in Phantom to continue.',
+  [ErrorCode.FLOW_ABORTED]: 'Open Phantom and retry signing. If it persists, reconnect wallet.',
   [ErrorCode.AUTHORIZATION_FAILED]: 'Reconnect wallet, then retry.',
   [ErrorCode.AUTH_TOKEN_INVALID]: 'Session token expired or missing. Reconnect wallet.',
   [ErrorCode.TIMEOUT]: 'Request timed out. Retry signing.',
@@ -43,8 +44,8 @@ export default function App() {
   const toolkit = useMemo(() => {
     const provider = createMwaProvider({
       appIdentity: {
-        name: 'SMWT Demo App',
-        icon: 'splash.png'
+        name: 'SMWT Demo',
+        uri: 'https://github.com/Mateja3m/solana-mobile-wallet-toolkit'
       },
       chain: 'solana:devnet',
       logger: {
