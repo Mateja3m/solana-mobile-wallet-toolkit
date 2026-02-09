@@ -9,11 +9,6 @@ global.Buffer = global.Buffer || Buffer;
 
 const MESSAGE = 'SMWT PoC signing demo';
 const MAX_SIGNATURE_PREVIEW = 24;
-const MESSAGE_OPTIONS = [
-  { key: 'hello', label: 'hello', value: 'hello' },
-  { key: 'smwt', label: 'SMWT PoC signing test', value: 'SMWT PoC signing test' },
-  { key: 'json', label: 'JSON with timestamp', value: null }
-];
 
 const ERROR_GUIDANCE = {
   [ErrorCode.WALLET_NOT_INSTALLED]: 'Install Phantom (or another MWA wallet) on this Android device.',
@@ -39,7 +34,6 @@ export default function App() {
   const [logs, setLogs] = useState([]);
   const [signatureBase64, setSignatureBase64] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
-  const [selectedMessageKey, setSelectedMessageKey] = useState(MESSAGE_OPTIONS[0].key);
 
   const addLog = useCallback((message) => {
     const timestamp = new Date().toISOString().split('T')[1].replace('Z', '');
@@ -89,11 +83,7 @@ export default function App() {
     setIsBusy(true);
     try {
       addLog('Sign Message button pressed.');
-      const chosenMessage = selectedMessageKey === 'json'
-        ? JSON.stringify({ type: 'smwt-sign-test', timestamp: new Date().toISOString() })
-        : MESSAGE_OPTIONS.find((option) => option.key === selectedMessageKey)?.value || MESSAGE;
-      const messageBytes = Buffer.from(chosenMessage, 'utf8');
-      addLog(`Selected message: "${chosenMessage}"`);
+      const messageBytes = Buffer.from(MESSAGE, 'utf8');
       const signature = await toolkit.signMessage(messageBytes);
       const base64 = Buffer.from(signature).toString('base64');
       setSignatureBase64(base64);
@@ -173,19 +163,6 @@ export default function App() {
         </View>
         <View style={styles.buttonRow}>
           <Button title="Disconnect" onPress={onDisconnect} disabled={!canDisconnect} />
-        </View>
-
-        <View style={styles.statusBox}>
-          <Text style={styles.statusLabel}>Test Message</Text>
-          {MESSAGE_OPTIONS.map((option) => (
-            <View style={styles.buttonRow} key={option.key}>
-              <Button
-                title={selectedMessageKey === option.key ? `Selected: ${option.label}` : option.label}
-                onPress={() => setSelectedMessageKey(option.key)}
-                disabled={isBusy}
-              />
-            </View>
-          ))}
         </View>
 
         <View style={styles.logBox}>
