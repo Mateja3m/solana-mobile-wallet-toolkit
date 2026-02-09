@@ -1,8 +1,7 @@
 import { transact } from '@solana-mobile/mobile-wallet-adapter-protocol-web3js';
+import bs58 from 'bs58';
 import { Platform } from 'react-native';
 import { ErrorCode, SMWTError, normalizeProviderError } from '../errors.js';
-
-const SIGN_DECLINED_LOCKED_THRESHOLD_MS = 1500;
 
 export function createMwaProvider(options = {}) {
   const {
@@ -29,12 +28,6 @@ export function createMwaProvider(options = {}) {
     }
   };
 
-  const maskToken = (token) => {
-    if (!token) return '(none)';
-    const tail = token.slice(-6);
-    return `***${tail}`;
-  };
-
   const isAuthRelatedError = (error) => {
     const message = String(error?.message || error).toLowerCase();
     return (
@@ -45,22 +38,6 @@ export function createMwaProvider(options = {}) {
       message.includes('reauthorize') ||
       message.includes('not authorized')
     );
-  };
-
-  const isDeclinedError = (error) => {
-    const message = String(error?.message || error).toLowerCase();
-    const code = Number(error?.code);
-    return (
-      code === -3 ||
-      message.includes('declined') ||
-      message.includes('rejected') ||
-      message.includes('request declined')
-    );
-  };
-
-  const isTimeoutError = (error) => {
-    const message = String(error?.message || error).toLowerCase();
-    return message.includes('timeout') || message.includes('timed out');
   };
 
   const isUtf8Message = (value) => {
@@ -75,25 +52,45 @@ export function createMwaProvider(options = {}) {
     }
   };
 
-  const toBase64Prefix = (bytes, prefixLength = 12) => {
+  const decodeBase64Address = (address) => {
+    if (typeof address !== 'string') return null;
+    const bufferCtor = globalThis?.Buffer;
+    if (!bufferCtor || typeof bufferCtor.from !== 'function') return null;
+
     try {
-      if (globalThis?.Buffer && typeof globalThis.Buffer.from === 'function') {
-        return globalThis.Buffer.from(bytes).toString('base64').slice(0, prefixLength);
-      }
-      if (typeof btoa === 'function') {
-        let binary = '';
-        for (let i = 0; i < bytes.length; i += 1) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        return btoa(binary).slice(0, prefixLength);
-      }
+      const bytes = bufferCtor.from(address, 'base64');
+      if (bytes.length !== 32) return null;
+
+      const normalizedInput = address.replace(/=+$/g, '');
+      const normalizedDecoded = bytes.toString('base64').replace(/=+$/g, '');
+      if (normalizedInput !== normalizedDecoded) return null;
+
+      return Uint8Array.from(bytes);
     } catch (_error) {
-      // fall through to unavailable marker
+      return null;
     }
-    return 'unavailable';
   };
 
-  const assertSigningPreflight = async () => {
+  const normalizeAuthorizedAccount = (account) => {
+    const adapterAddress = account?.address;
+    if (typeof adapterAddress !== 'string' || adapterAddress.length === 0) {
+      throw new SMWTError(
+        ErrorCode.AUTHORIZATION_FAILED,
+        'Authorization succeeded but returned an invalid account address.'
+      );
+    }
+
+    const addressBytes = decodeBase64Address(adapterAddress);
+    const publicKey = addressBytes ? bs58.encode(addressBytes) : adapterAddress;
+
+    return {
+      adapterAddress,
+      publicKey,
+      addressEncoding: addressBytes ? 'base64' : 'string'
+    };
+  };
+
+  const assertSigningPreflight = () => {
     if (!isWalletPackageAvailable()) {
       throw new SMWTError(
         ErrorCode.WALLET_NOT_INSTALLED,
@@ -103,7 +100,7 @@ export function createMwaProvider(options = {}) {
 
     if (!session) {
       throw new SMWTError(
-        ErrorCode.AUTHORIZATION_FAILED,
+        ErrorCode.NOT_CONNECTED,
         'No active wallet session. Connect Phantom before signing.'
       );
     }
@@ -121,12 +118,16 @@ export function createMwaProvider(options = {}) {
         'Missing wallet account. Reconnect Phantom before signing.'
       );
     }
-
-    const available = await Promise.resolve(Platform.OS === 'android');
-    if (!available) {
+    if (!session.accountAddress) {
       throw new SMWTError(
-        ErrorCode.WALLET_NOT_INSTALLED,
-        'No compatible wallet detected on this device.'
+        ErrorCode.AUTHORIZATION_FAILED,
+        'Missing wallet adapter account reference. Reconnect Phantom before signing.'
+      );
+    }
+    if (Platform.OS !== 'android') {
+      throw new SMWTError(
+        ErrorCode.PLATFORM_NOT_SUPPORTED,
+        'MWA provider is Android-only in this PoC.'
       );
     }
   };
@@ -136,18 +137,17 @@ export function createMwaProvider(options = {}) {
   };
 
   const applyAuthorizationResult = (authorizationResult) => {
+    const normalizedAccount = normalizeAuthorizedAccount(authorizationResult.accounts[0]);
     authToken = authorizationResult.auth_token || authToken;
     session = {
-      publicKey: authorizationResult.accounts[0].address,
+      publicKey: normalizedAccount.publicKey,
+      accountAddress: normalizedAccount.adapterAddress,
+      addressEncoding: normalizedAccount.addressEncoding,
       walletName: authorizationResult.wallet_name || 'MWA Wallet',
       authToken
     };
 
-    log(
-      'info',
-      `[MWA:authorize] accounts=${authorizationResult.accounts.length} wallet=${session.walletName} token=${maskToken(authToken)}`
-    );
-
+    log('info', `Connected to ${session.walletName}.`);
     return session;
   };
 
@@ -173,7 +173,7 @@ export function createMwaProvider(options = {}) {
     } catch (error) {
       // Some wallets may reject reauthorize but accept authorize+auth_token.
       if (tokenToUse) {
-        log('warn', `[MWA:authorize] reauthorize failed, retrying authorize with existing token ${maskToken(tokenToUse)}.`);
+        log('warn', 'Reauthorize failed. Retrying with authorize + existing auth token.');
         authorizationResult = await wallet.authorize({
           chain,
           identity: appIdentity,
@@ -239,7 +239,7 @@ export function createMwaProvider(options = {}) {
     },
 
     async signMessage(message) {
-      await assertSigningPreflight();
+      assertSigningPreflight();
 
       if (!(message instanceof Uint8Array) || !isUtf8Message(message)) {
         throw new SMWTError(
@@ -248,23 +248,13 @@ export function createMwaProvider(options = {}) {
         );
       }
 
-      log(
-        'info',
-        `[MWA:sign] payload validation ok bytes=${message.length} base64_prefix=${toBase64Prefix(message)}`
-      );
-
       const signOnce = async ({ tokenForAuthorize }) => transact(async (wallet) => {
         // Every transact call starts a new wallet session; re-authorize using the current auth token.
         const activeSession = await authorizeInSession(wallet, tokenForAuthorize);
-        const signingAddress = activeSession.publicKey;
-        log(
-          'info',
-          `[MWA:sign] using auth token ${maskToken(activeSession.authToken)} address=${signingAddress} bytes=${message.length}`
-        );
+        const signingAddress = activeSession.accountAddress;
 
         // @solana-mobile/mobile-wallet-adapter-protocol-web3js expects object params with payloads[].
         const result = await wallet.signMessages({
-          auth_token: activeSession.authToken,
           payloads: [message],
           addresses: [signingAddress]
         });
@@ -279,54 +269,16 @@ export function createMwaProvider(options = {}) {
         return result.signed_payloads[0];
       });
 
-      const signStartedAt = Date.now();
-      log('info', `[MWA:sign] request launched at=${new Date(signStartedAt).toISOString()}`);
-
       try {
-        const signedPayload = await signOnce({ tokenForAuthorize: session.authToken });
-        const durationMs = Date.now() - signStartedAt;
-        log('info', `[MWA:sign] request completed in ${durationMs}ms`);
-        return signedPayload;
+        return await signOnce({ tokenForAuthorize: session.authToken });
       } catch (error) {
-        const durationMs = Date.now() - signStartedAt;
         logWalletError('sign', error);
-        log(
-          'warn',
-          `[MWA:sign] request failed after ${durationMs}ms (code=${error?.code ?? 'UNKNOWN'}).`
-        );
-
-        const declined = isDeclinedError(error);
-        const likelyWalletLockedOrAborted =
-          declined && durationMs < SIGN_DECLINED_LOCKED_THRESHOLD_MS;
-
-        if (likelyWalletLockedOrAborted) {
-          log(
-            'warn',
-            `[MWA:sign] LIKELY_WALLET_LOCKED_OR_ABORTED: declined in ${durationMs}ms (<${SIGN_DECLINED_LOCKED_THRESHOLD_MS}ms).`
-          );
-          throw normalizeProviderError(error, { walletLockedOrAborted: true });
-        }
-
-        if (declined) {
-          log(
-            'warn',
-            `[MWA:sign] USER_DECLINED_APPROVAL: user declined signing in wallet UI after ${durationMs}ms.`
-          );
-          throw normalizeProviderError(error);
-        }
-
-        if (isTimeoutError(error)) {
-          throw normalizeProviderError(error);
-        }
 
         if (isAuthRelatedError(error)) {
-          log('warn', '[MWA:sign] auth token rejected, attempting a fresh authorize and single retry.');
+          log('warn', 'Auth token rejected. Attempting a fresh authorize + one retry.');
           try {
             // Single retry with a fresh authorize().
-            const retrySignedPayload = await signOnce({ tokenForAuthorize: undefined });
-            const totalDurationMs = Date.now() - signStartedAt;
-            log('info', `[MWA:sign] request completed after retry in ${totalDurationMs}ms`);
-            return retrySignedPayload;
+            return await signOnce({ tokenForAuthorize: undefined });
           } catch (retryError) {
             logWalletError('sign-retry', retryError);
             throw normalizeProviderError(retryError);

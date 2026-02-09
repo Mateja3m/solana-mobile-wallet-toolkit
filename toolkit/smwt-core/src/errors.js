@@ -1,13 +1,11 @@
 export const ErrorCode = {
   WALLET_NOT_INSTALLED: 'WALLET_NOT_INSTALLED',
   USER_DECLINED_APPROVAL: 'USER_DECLINED_APPROVAL',
-  WALLET_LOCKED_OR_ABORTED: 'WALLET_LOCKED_OR_ABORTED',
   AUTHORIZATION_FAILED: 'AUTHORIZATION_FAILED',
   AUTH_TOKEN_INVALID: 'AUTH_TOKEN_INVALID',
   TIMEOUT: 'TIMEOUT',
   DEEPLINK_RETURN_FAILED: 'DEEPLINK_RETURN_FAILED',
   USER_CANCELLED: 'USER_DECLINED_APPROVAL',
-  LIKELY_WALLET_LOCKED_OR_ABORTED: 'WALLET_LOCKED_OR_ABORTED',
   RETURN_FAILED: 'DEEPLINK_RETURN_FAILED',
   NOT_CONNECTED: 'NOT_CONNECTED',
   INVALID_MESSAGE: 'INVALID_MESSAGE',
@@ -25,20 +23,11 @@ export class SMWTError extends Error {
   }
 }
 
-export function normalizeProviderError(error, options = {}) {
-  const { walletLockedOrAborted = false } = options;
+export function normalizeProviderError(error) {
   if (error instanceof SMWTError) return error;
   const message = String(error && error.message ? error.message : error);
   const lower = message.toLowerCase();
   const code = Number(error?.code);
-
-  if (walletLockedOrAborted) {
-    return new SMWTError(
-      ErrorCode.WALLET_LOCKED_OR_ABORTED,
-      'Phantom is locked. Please open Phantom, unlock it, then retry signing.',
-      error
-    );
-  }
 
   if (
     lower.includes('auth token not valid for signing') ||
@@ -47,7 +36,7 @@ export function normalizeProviderError(error, options = {}) {
   ) {
     return new SMWTError(
       ErrorCode.AUTH_TOKEN_INVALID,
-      'Your wallet session token is no longer valid. Reconnect and try again.',
+      'Wallet session token is no longer valid. Reconnect and try again.',
       error
     );
   }
@@ -59,7 +48,7 @@ export function normalizeProviderError(error, options = {}) {
   ) {
     return new SMWTError(
       ErrorCode.AUTHORIZATION_FAILED,
-      'Wallet authorization failed. Please reconnect and try again.',
+      'Wallet authorization failed. Reconnect and try again.',
       error
     );
   }
@@ -70,13 +59,25 @@ export function normalizeProviderError(error, options = {}) {
   ) {
     return new SMWTError(
       ErrorCode.TIMEOUT,
-      'The wallet request timed out. Open Phantom and retry.',
+      'Wallet request timed out. Retry the operation.',
+      error
+    );
+  }
+
+  if (code === -1) {
+    return new SMWTError(
+      ErrorCode.AUTHORIZATION_FAILED,
+      'Wallet authorization failed. Reconnect and try again.',
       error
     );
   }
 
   if (lower.includes('not installed') || lower.includes('no wallet') || lower.includes('no compatible')) {
-    return new SMWTError(ErrorCode.WALLET_NOT_INSTALLED, message, error);
+    return new SMWTError(
+      ErrorCode.WALLET_NOT_INSTALLED,
+      'No compatible wallet detected on this device.',
+      error
+    );
   }
 
   if (lower.includes('association') || lower.includes('return') || lower.includes('deeplink')) {

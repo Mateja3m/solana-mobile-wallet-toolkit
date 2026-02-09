@@ -133,8 +133,7 @@ adb install -r demo/android/app/build/outputs/apk/debug/app-debug.apk
 ## Troubleshooting
 
 - **Expo Go does not work**: this project uses native modules and MWA app-to-app flows.
-- **Wallet not detected / connect fails**: verify wallet is installed and unlocked on the same device.
-- **Signing may decline immediately**: wallet must be unlocked before signing; otherwise the wallet may immediately decline the request.
+- **Wallet not detected / connect fails**: verify wallet is installed on the same device and supports MWA.
 - **App opens but JS bundle fails to load**: confirm Metro is running and run `adb reverse tcp:8081 tcp:8081`.
 - **No device in `adb devices`**: reinstall USB driver (Windows), reconnect cable, and re-enable USB debugging.
 

@@ -9,7 +9,6 @@ global.Buffer = global.Buffer || Buffer;
 
 const MESSAGE = 'SMWT PoC signing demo';
 const MAX_SIGNATURE_PREVIEW = 24;
-const SIGN_DECLINED_LOCKED_THRESHOLD_MS = 1500;
 const MESSAGE_OPTIONS = [
   { key: 'hello', label: 'hello', value: 'hello' },
   { key: 'smwt', label: 'SMWT PoC signing test', value: 'SMWT PoC signing test' },
@@ -19,10 +18,9 @@ const MESSAGE_OPTIONS = [
 const ERROR_GUIDANCE = {
   [ErrorCode.WALLET_NOT_INSTALLED]: 'Install Phantom (or another MWA wallet) on this Android device.',
   [ErrorCode.USER_DECLINED_APPROVAL]: 'Approve the signature in Phantom to continue.',
-  [ErrorCode.WALLET_LOCKED_OR_ABORTED]: 'Open Phantom first, unlock it, then retry signing.',
   [ErrorCode.AUTHORIZATION_FAILED]: 'Reconnect wallet, then retry.',
   [ErrorCode.AUTH_TOKEN_INVALID]: 'Session token expired or missing. Reconnect wallet.',
-  [ErrorCode.TIMEOUT]: 'Request timed out. Keep Phantom open and retry.',
+  [ErrorCode.TIMEOUT]: 'Request timed out. Retry signing.',
   [ErrorCode.DEEPLINK_RETURN_FAILED]: 'Wallet did not return to app. Bring app back to foreground and retry.'
 };
 
@@ -89,32 +87,21 @@ export default function App() {
 
   const onSign = async () => {
     setIsBusy(true);
-    const signStartedAt = Date.now();
     try {
-      addLog(`Sign Message button pressed at ${new Date(signStartedAt).toISOString()}. Opening Phantom...`);
+      addLog('Sign Message button pressed.');
       const chosenMessage = selectedMessageKey === 'json'
         ? JSON.stringify({ type: 'smwt-sign-test', timestamp: new Date().toISOString() })
         : MESSAGE_OPTIONS.find((option) => option.key === selectedMessageKey)?.value || MESSAGE;
       const messageBytes = Buffer.from(chosenMessage, 'utf8');
-      const messagePrefix = Buffer.from(messageBytes).toString('base64').slice(0, 12);
       addLog(`Selected message: "${chosenMessage}"`);
-      addLog(`Message debug: bytes=${messageBytes.length} base64_prefix=${messagePrefix}`);
       const signature = await toolkit.signMessage(messageBytes);
       const base64 = Buffer.from(signature).toString('base64');
       setSignatureBase64(base64);
-      const durationMs = Date.now() - signStartedAt;
-      addLog(`Message signed successfully in ${durationMs}ms.`);
+      addLog('Message signed successfully.');
     } catch (error) {
-      const durationMs = Date.now() - signStartedAt;
       const errorCode = error.code || 'UNKNOWN';
-      addLog(`Sign flow returned in ${durationMs}ms (threshold=${SIGN_DECLINED_LOCKED_THRESHOLD_MS}ms).`);
-      addLog(`Sign error code: ${errorCode}`);
       const guidance = ERROR_GUIDANCE[errorCode] || 'Review wallet/app logs and retry.';
-
-      if (errorCode === ErrorCode.WALLET_LOCKED_OR_ABORTED) {
-        addLog('WALLET_LOCKED_OR_ABORTED.');
-        addLog('Phantom is locked. Please open Phantom, unlock it, then retry signing.');
-      } else if (errorCode === ErrorCode.USER_DECLINED_APPROVAL || errorCode === ErrorCode.USER_CANCELLED) {
+      if (errorCode === ErrorCode.USER_DECLINED_APPROVAL || errorCode === ErrorCode.USER_CANCELLED) {
         addLog('USER_DECLINED_APPROVAL in Phantom UI.');
         addLog(`Guidance: ${guidance}`);
       } else {
