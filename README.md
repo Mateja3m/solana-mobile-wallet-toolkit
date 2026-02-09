@@ -130,6 +130,28 @@ adb install -r demo/android/app/build/outputs/apk/debug/app-debug.apk
 5. Confirm signature appears in app logs/status.
 6. Tap **Disconnect**.
 
+## Expected result (demo flow)
+After each action in the demo app, you should see:
+
+1. Connect
+- Wallet opens and authorization is approved.
+- App status changes to `Connected`.
+- Logs show `Connected`.
+
+2. Sign Message
+- Wallet opens and the sign prompt is approved.
+- App shows a base64 signature preview.
+- Logs show `Signing requested` and `Message signed successfully`.
+
+3. Disconnect
+- Session is closed.
+- App status changes to `Disconnected`.
+- Logs show `Disconnected`.
+
+## Device recommendation
+For the most reliable MWA app-to-app behavior, test on a physical Android device with a wallet app installed on the same device.
+Primary wallet tested in this PoC is Phantom on Android.
+
 ## Troubleshooting
 
 - **Expo Go does not work**: this project uses native modules and MWA app-to-app flows.
