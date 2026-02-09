@@ -3,22 +3,12 @@ import { Buffer } from 'buffer';
 import React, { useCallback, useMemo, useState } from 'react';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Button, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { createMwaProvider, createToolkit, ErrorCode } from 'smwt-core';
+import { createMwaProvider, createToolkit } from 'smwt-core';
 
 global.Buffer = global.Buffer || Buffer;
 
 const MESSAGE = 'SMWT PoC signing demo';
 const MAX_SIGNATURE_PREVIEW = 24;
-
-const ERROR_GUIDANCE = {
-  [ErrorCode.WALLET_NOT_INSTALLED]: 'Install Phantom (or another MWA wallet) on this Android device.',
-  [ErrorCode.USER_DECLINED_APPROVAL]: 'Approve the signature in Phantom to continue.',
-  [ErrorCode.FLOW_ABORTED]: 'Open Phantom and retry signing. If it persists, reconnect wallet.',
-  [ErrorCode.AUTHORIZATION_FAILED]: 'Reconnect wallet, then retry.',
-  [ErrorCode.AUTH_TOKEN_INVALID]: 'Session token expired or missing. Reconnect wallet.',
-  [ErrorCode.TIMEOUT]: 'Request timed out. Retry signing.',
-  [ErrorCode.DEEPLINK_RETURN_FAILED]: 'Wallet did not return to app. Bring app back to foreground and retry.'
-};
 
 function shortenMiddle(value, sideLength = MAX_SIGNATURE_PREVIEW) {
   if (!value || value.length <= sideLength * 2 + 3) {
@@ -47,34 +37,23 @@ export default function App() {
         name: 'SMWT Demo',
         uri: 'https://github.com/Mateja3m/solana-mobile-wallet-toolkit'
       },
-      chain: 'solana:devnet',
-      logger: {
-        info: (message) => addLog(message),
-        warn: (message) => addLog(message),
-        error: (message) => addLog(message)
-      }
+      chain: 'solana:devnet'
     });
 
     return createToolkit({
-      provider,
-      logger: {
-        info: (message) => addLog(message),
-        warn: (message) => addLog(message),
-        error: (message) => addLog(message)
-      }
+      provider
     });
-  }, [addLog]);
+  }, []);
 
   const onConnect = async () => {
     setIsBusy(true);
     try {
-      addLog('Connect button pressed.');
       const nextSession = await toolkit.connect();
       setSession(nextSession);
       setSignatureBase64(null);
-      addLog(`Connected: ${nextSession.publicKey}`);
+      addLog('Connected');
     } catch (error) {
-      addLog(`Connect error: ${error.code || 'UNKNOWN'} - ${error.message}`);
+      addLog(`Error (${error.code || 'UNKNOWN'}): ${error.message}`);
     } finally {
       setIsBusy(false);
     }
@@ -83,22 +62,14 @@ export default function App() {
   const onSign = async () => {
     setIsBusy(true);
     try {
-      addLog('Sign Message button pressed.');
+      addLog('Signing requested');
       const messageBytes = Buffer.from(MESSAGE, 'utf8');
       const signature = await toolkit.signMessage(messageBytes);
       const base64 = Buffer.from(signature).toString('base64');
       setSignatureBase64(base64);
       addLog('Message signed successfully.');
     } catch (error) {
-      const errorCode = error.code || 'UNKNOWN';
-      const guidance = ERROR_GUIDANCE[errorCode] || 'Review wallet/app logs and retry.';
-      if (errorCode === ErrorCode.USER_DECLINED_APPROVAL || errorCode === ErrorCode.USER_CANCELLED) {
-        addLog('USER_DECLINED_APPROVAL in Phantom UI.');
-        addLog(`Guidance: ${guidance}`);
-      } else {
-        addLog(`Sign error: ${errorCode} - ${error.message}`);
-        addLog(`Guidance: ${guidance}`);
-      }
+      addLog(`Error (${error.code || 'UNKNOWN'}): ${error.message}`);
     } finally {
       setIsBusy(false);
     }
@@ -107,13 +78,12 @@ export default function App() {
   const onDisconnect = async () => {
     setIsBusy(true);
     try {
-      addLog('Disconnect button pressed.');
       await toolkit.disconnect();
       setSession(null);
       setSignatureBase64(null);
       addLog('Disconnected.');
     } catch (error) {
-      addLog(`Disconnect error: ${error.code || 'UNKNOWN'} - ${error.message}`);
+      addLog(`Error (${error.code || 'UNKNOWN'}): ${error.message}`);
     } finally {
       setIsBusy(false);
     }
