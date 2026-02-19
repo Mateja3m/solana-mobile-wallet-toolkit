@@ -3,11 +3,51 @@ import { Buffer } from 'buffer';
 import React, { useCallback, useMemo, useState } from 'react';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Button, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { createMwaProvider, createToolkit } from 'smwt-core';
+import { createMwaProvider, createToolkit, ErrorCode } from 'smwt-core';
+import { createLogger } from './logger';
 
 global.Buffer = global.Buffer || Buffer;
 
 const MESSAGE = 'SMWT PoC signing test';
+
+function mapErrorToUserFeedback(error) {
+  const code = error?.code || ErrorCode.UNKNOWN;
+
+  switch (code) {
+    case ErrorCode.USER_DECLINED_APPROVAL:
+      return {
+        reason: 'Signing request was declined in the wallet.',
+        guidance: 'Approve the wallet request to complete signing.'
+      };
+    case ErrorCode.WALLET_NOT_INSTALLED:
+      return {
+        reason: 'No compatible Solana wallet was detected on this device.',
+        guidance: 'Install Phantom and retry the flow.'
+      };
+    case ErrorCode.TIMEOUT:
+      return {
+        reason: 'Wallet request timed out.',
+        guidance: 'Retry and keep both apps active during the handoff.'
+      };
+    case ErrorCode.AUTHORIZATION_FAILED:
+    case ErrorCode.AUTH_TOKEN_INVALID:
+      return {
+        reason: 'Wallet session is no longer valid.',
+        guidance: 'Reconnect the wallet, then sign again.'
+      };
+    case ErrorCode.FLOW_ABORTED:
+    case ErrorCode.DEEPLINK_RETURN_FAILED:
+      return {
+        reason: 'Wallet did not return control to the app cleanly.',
+        guidance: 'Switch back to SMWT manually and retry signing.'
+      };
+    default:
+      return {
+        reason: 'Unexpected wallet error occurred.',
+        guidance: 'Retry once. If it fails again, reconnect the wallet.'
+      };
+  }
+}
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -19,6 +59,8 @@ export default function App() {
     const timestamp = new Date().toISOString().split('T')[1].replace('Z', '');
     setLogs((prev) => [`${timestamp} ${message}`, ...prev]);
   }, []);
+
+  const logger = useMemo(() => createLogger(addLog), [addLog]);
 
   const toolkit = useMemo(() => {
     const provider = createMwaProvider({
@@ -32,15 +74,31 @@ export default function App() {
     return createToolkit({ provider });
   }, []);
 
+  const handleError = useCallback((error, actionLabel) => {
+    const code = error?.code || ErrorCode.UNKNOWN;
+    const feedback = mapErrorToUserFeedback(error);
+    logger.error(`${actionLabel} failed (${code}): ${feedback.reason}`);
+    logger.warn(feedback.guidance);
+
+    if (logger.debugEnabled) {
+      logger.debug('Raw error details', {
+        action: actionLabel,
+        code,
+        message: error?.message,
+        stack: error?.stack
+      });
+    }
+  }, [logger]);
+
   const onConnect = async () => {
     setIsBusy(true);
     try {
       const nextSession = await toolkit.connect();
       setSession(nextSession);
       setSignatureBase64(null);
-      addLog('Connected');
+      logger.info('Connected');
     } catch (error) {
-      addLog(`Error (${error.code || 'UNKNOWN'}): ${error.message}`);
+      handleError(error, 'Connect');
     } finally {
       setIsBusy(false);
     }
@@ -49,13 +107,13 @@ export default function App() {
   const onSign = async () => {
     setIsBusy(true);
     try {
-      addLog('Signing requested');
+      logger.info('Signing requested');
       const messageBytes = Buffer.from(MESSAGE, 'utf8');
       const signature = await toolkit.signMessage(messageBytes);
       setSignatureBase64(Buffer.from(signature).toString('base64'));
-      addLog('Signature received');
+      logger.info('Signature received');
     } catch (error) {
-      addLog(`Error (${error.code || 'UNKNOWN'}): ${error.message}`);
+      handleError(error, 'Sign message');
     } finally {
       setIsBusy(false);
     }
@@ -67,9 +125,9 @@ export default function App() {
       await toolkit.disconnect();
       setSession(null);
       setSignatureBase64(null);
-      addLog('Disconnected');
+      logger.info('Disconnected');
     } catch (error) {
-      addLog(`Error (${error.code || 'UNKNOWN'}): ${error.message}`);
+      handleError(error, 'Disconnect');
     } finally {
       setIsBusy(false);
     }
@@ -78,7 +136,7 @@ export default function App() {
   const onCopySignature = () => {
     if (!signatureBase64) return;
     Clipboard.setString(signatureBase64);
-    addLog('Signature copied');
+    logger.info('Signature copied');
   };
 
   return (
