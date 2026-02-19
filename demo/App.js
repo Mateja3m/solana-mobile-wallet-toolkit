@@ -7,18 +7,7 @@ import { createMwaProvider, createToolkit } from 'smwt-core';
 
 global.Buffer = global.Buffer || Buffer;
 
-const MESSAGE = 'SMWT PoC signing demo';
-const MAX_SIGNATURE_PREVIEW = 24;
-
-function shortenMiddle(value, sideLength = MAX_SIGNATURE_PREVIEW) {
-  if (!value || value.length <= sideLength * 2 + 3) {
-    return value;
-  }
-
-  const start = value.slice(0, sideLength);
-  const end = value.slice(-sideLength);
-  return `${start}...${end}`;
-}
+const MESSAGE = 'SMWT PoC signing test';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -40,9 +29,7 @@ export default function App() {
       chain: 'solana:devnet'
     });
 
-    return createToolkit({
-      provider
-    });
+    return createToolkit({ provider });
   }, []);
 
   const onConnect = async () => {
@@ -65,9 +52,8 @@ export default function App() {
       addLog('Signing requested');
       const messageBytes = Buffer.from(MESSAGE, 'utf8');
       const signature = await toolkit.signMessage(messageBytes);
-      const base64 = Buffer.from(signature).toString('base64');
-      setSignatureBase64(base64);
-      addLog('Message signed successfully.');
+      setSignatureBase64(Buffer.from(signature).toString('base64'));
+      addLog('Signature received');
     } catch (error) {
       addLog(`Error (${error.code || 'UNKNOWN'}): ${error.message}`);
     } finally {
@@ -81,7 +67,7 @@ export default function App() {
       await toolkit.disconnect();
       setSession(null);
       setSignatureBase64(null);
-      addLog('Disconnected.');
+      addLog('Disconnected');
     } catch (error) {
       addLog(`Error (${error.code || 'UNKNOWN'}): ${error.message}`);
     } finally {
@@ -90,54 +76,43 @@ export default function App() {
   };
 
   const onCopySignature = () => {
-    if (!signatureBase64) {
-      return;
-    }
-
+    if (!signatureBase64) return;
     Clipboard.setString(signatureBase64);
-    addLog('Signature copied to clipboard.');
+    addLog('Signature copied');
   };
-
-  const canConnect = !isBusy && !session;
-  const canSign = !isBusy && !!session;
-  const canDisconnect = !isBusy && !!session;
-  const signaturePreview = shortenMiddle(signatureBase64);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <Text style={styles.title}>SMWT - Demo App</Text>
-        <Text style={styles.subtitle}>React Native wallet connection + signing demo</Text>
+        <Text style={styles.title}>SMWT PoC Demo</Text>
 
-        <View style={styles.statusBox}>
-          <Text style={styles.statusLabel}>Status</Text>
-          <Text style={styles.statusText}>
-            {session ? `Connected: ${session.publicKey}` : 'Disconnected'}
+        <View style={styles.card}>
+          <Text style={styles.label}>Status</Text>
+          <Text style={styles.value}>{session ? `Connected: ${session.publicKey}` : 'Disconnected'}</Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.label}>Signature (base64)</Text>
+          <Text style={styles.signature} selectable>
+            {signatureBase64 || 'No signature yet'}
           </Text>
-        </View>
-
-        {signatureBase64 ? (
-          <View style={styles.statusBox}>
-            <Text style={styles.statusLabel}>Signature (base64)</Text>
-            <Text style={styles.statusText}>{signaturePreview}</Text>
-            <View style={styles.copyButton}>
-              <Button title="Copy Signature" onPress={onCopySignature} />
-            </View>
+          <View style={styles.copyButton}>
+            <Button title="COPY" onPress={onCopySignature} disabled={!signatureBase64 || isBusy} />
           </View>
-        ) : null}
+        </View>
 
         <View style={styles.buttonRow}>
-          <Button title="Connect" onPress={onConnect} disabled={!canConnect} />
+          <Button title="CONNECT" onPress={onConnect} disabled={isBusy || !!session} />
         </View>
         <View style={styles.buttonRow}>
-          <Button title="Sign Message" onPress={onSign} disabled={!canSign} />
+          <Button title="SIGN MESSAGE" onPress={onSign} disabled={isBusy || !session} />
         </View>
         <View style={styles.buttonRow}>
-          <Button title="Disconnect" onPress={onDisconnect} disabled={!canDisconnect} />
+          <Button title="DISCONNECT" onPress={onDisconnect} disabled={isBusy || !session} />
         </View>
 
         <View style={styles.logBox}>
-          <Text style={styles.statusLabel}>Logs</Text>
+          <Text style={styles.label}>Logs</Text>
           <ScrollView style={styles.logScroll}>
             {logs.map((line, index) => (
               <Text style={styles.logLine} key={index}>
@@ -165,22 +140,23 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600'
   },
-  subtitle: {
-    color: '#555'
-  },
-  statusBox: {
+  card: {
     backgroundColor: '#FFFFFF',
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E0E0E0'
   },
-  statusLabel: {
+  label: {
     fontWeight: '600',
     marginBottom: 4
   },
-  statusText: {
+  value: {
     color: '#333'
+  },
+  signature: {
+    color: '#333',
+    fontSize: 12
   },
   buttonRow: {
     marginTop: 4
